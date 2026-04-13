@@ -7,12 +7,14 @@ import Tea from "./models/Tea.js";
 dotenv.config();
 
 const app = express();
+const PORT = 5000
+const MONGO_URL="mongodb+srv://sujaltechnocomet_db_user:fWLJFAHaSXc9Nx15@cluster0.snx0qjb.mongodb.net/tea-tracker"
 app.use(cors());
 app.use(express.json());
 
 // DB Connect
 mongoose
-  .connect(process.env.MONGO_URL)
+  .connect(MONGO_URL)
   .then(() => console.log("MongoDB Connected ✅"))
   .catch((err) => console.log(err));
 
@@ -54,6 +56,6 @@ app.delete("/api/tea/:id", async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT, () =>
-  console.log(`Server running on ${process.env.PORT}`)
+app.listen(PORT, () =>
+  console.log(`Server running on ${PORT}`)
 );

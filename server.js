@@ -8,7 +8,7 @@ dotenv.config();
 
 const app = express();
 const PORT = 5000
-const MONGO_URL="mongodb+srv://sujaltechnocomet_db_user:fWLJFAHaSXc9Nx15@cluster0.snx0qjb.mongodb.net/tea-tracker"
+const MONGO_URL="mongodb+srv://dhruvmer610_db_user:0DXFXaFIDKzOI8nL@cluster0.vmf9lyk.mongodb.net/tea-tracker"
 app.use(cors());
 app.use(express.json());
 

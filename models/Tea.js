@@ -9,6 +9,11 @@ const TeaSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  drinkType: {
+    type: String,
+    enum: ["tea", "coffee"],
+    default: "tea",
+  },
   amount: {
     type: Number,
     required: true,
@@ -16,6 +21,10 @@ const TeaSchema = new mongoose.Schema({
   date: {
     type: Date,
     default: Date.now,
+  },
+  paid: {
+    type: Boolean,
+    default: false,       // NEW: track payment status
   },
 });
 

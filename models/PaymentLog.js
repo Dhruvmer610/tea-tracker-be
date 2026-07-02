@@ -1,34 +1,36 @@
 import mongoose from "mongoose";
 
-const paymentLogSchema = new mongoose.Schema(
-  {
-    entryId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Tea",
-      required: true,
-    },
-    name: {
-      type: String,
-    },
-    entryDate: {
-      type: Date,
-    },
-    action: {
-      type: String,
-      enum: ["paid", "unpaid"],
-    },
-    changedBy: {
-      type: String,
-      default: "system",
-    },
-    timestamp: {
-      type: Date,
-      default: Date.now,
-    },
+const PaymentLogSchema = new mongoose.Schema({
+  entryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Tea",
+    default: null,  // null for bulk operations
   },
-  { timestamps: false }
-);
+  name: {
+    type: String,
+    required: true,
+  },
+  entryDate: {
+    type: Date,
+    default: Date.now,
+  },
+  action: {
+    type: String,
+    required: true,
+    enum: ["paid", "unpaid", "created", "edited", "deleted", "bulk_paid"],
+  },
+  changedBy: {
+    type: String,
+    default: "system",
+  },
+  details: {
+    type: String,
+    default: "",
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+  },
+});
 
-const PaymentLog = mongoose.model("PaymentLog", paymentLogSchema);
-
-export default PaymentLog;
+export default mongoose.model("PaymentLog", PaymentLogSchema);

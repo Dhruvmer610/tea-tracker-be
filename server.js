@@ -44,7 +44,6 @@ const getDayRange = (dateInput) => {
 const upsertPerson = async (name) => {
   try {
     const result = await People.findOneAndUpdate(
-      // match by name (case-insensitive)
       {
         name: {
           $regex: new RegExp(
@@ -54,7 +53,6 @@ const upsertPerson = async (name) => {
         },
       },
       {
-        // only set these fields if document is being INSERTED (not on update)
         $setOnInsert: {
           name: name,
           role: "employee",
@@ -68,7 +66,6 @@ const upsertPerson = async (name) => {
     );
     return result;
   } catch (err) {
-    // Non-blocking warning — tea entry still saves even if this fails
     console.warn("upsertPerson warning:", err.message);
   }
 };
@@ -77,16 +74,13 @@ const upsertPerson = async (name) => {
    PEOPLE ROUTES
 ══════════════════════════════════════ */
 
-/* ── GET all people ── */
 app.get("/api/people", async (req, res) => {
   try {
     const { isActive, role, search } = req.query;
     const filter = {};
-
     if (isActive !== undefined) filter.isActive = isActive === "true";
     if (role) filter.role = { $regex: new RegExp(role, "i") };
     if (search) filter.name = { $regex: new RegExp(search, "i") };
-
     const people = await People.find(filter).sort({ name: 1 }).lean();
     res.json(people);
   } catch (err) {
@@ -94,7 +88,6 @@ app.get("/api/people", async (req, res) => {
   }
 });
 
-/* ── GET single person ── */
 app.get("/api/people/:id", async (req, res) => {
   try {
     const person = await People.findById(req.params.id).lean();
@@ -105,14 +98,10 @@ app.get("/api/people/:id", async (req, res) => {
   }
 });
 
-/* ── POST create person manually ── */
 app.post("/api/people", async (req, res) => {
   try {
     const { name, role, drinkPreference, phone, notes } = req.body;
-
-    if (!name?.trim()) {
-      return res.status(400).json({ error: "Name is required" });
-    }
+    if (!name?.trim()) return res.status(400).json({ error: "Name is required" });
 
     const duplicate = await People.findOne({
       name: {
@@ -122,12 +111,7 @@ app.post("/api/people", async (req, res) => {
         ),
       },
     });
-
-    if (duplicate) {
-      return res.status(400).json({
-        error: `A person named "${name.trim()}" already exists.`,
-      });
-    }
+    if (duplicate) return res.status(400).json({ error: `"${name.trim()}" already exists.` });
 
     const person = new People({
       name: name.trim(),
@@ -136,47 +120,29 @@ app.post("/api/people", async (req, res) => {
       phone: phone?.trim() || "",
       notes: notes?.trim() || "",
     });
-
     await person.save();
     res.status(201).json(person);
   } catch (err) {
-    if (err.code === 11000) {
-      return res.status(400).json({ error: "Name must be unique" });
-    }
+    if (err.code === 11000) return res.status(400).json({ error: "Name must be unique" });
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ── PUT update person ── */
 app.put("/api/people/:id", async (req, res) => {
   try {
     const { name, role, drinkPreference, phone, notes, isActive } = req.body;
-
-    if (!name?.trim()) {
-      return res.status(400).json({ error: "Name is required" });
-    }
+    if (!name?.trim()) return res.status(400).json({ error: "Name is required" });
 
     const person = await People.findById(req.params.id);
     if (!person) return res.status(404).json({ error: "Person not found" });
 
-    const nameChanged =
-      person.name.toLowerCase() !== name.trim().toLowerCase();
-
+    const nameChanged = person.name.toLowerCase() !== name.trim().toLowerCase();
     if (nameChanged) {
       const duplicate = await People.findOne({
-        name: {
-          $regex: new RegExp(
-            `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
-            "i"
-          ),
-        },
+        name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
         _id: { $ne: req.params.id },
       });
-      if (duplicate) {
-        return res.status(400).json({
-          error: `A person named "${name.trim()}" already exists.`,
-        });
-      }
+      if (duplicate) return res.status(400).json({ error: `"${name.trim()}" already exists.` });
     }
 
     const updated = await People.findByIdAndUpdate(
@@ -191,35 +157,25 @@ app.put("/api/people/:id", async (req, res) => {
       },
       { new: true, runValidators: true }
     );
-
     res.json(updated);
   } catch (err) {
-    if (err.code === 11000) {
-      return res.status(400).json({ error: "Name must be unique" });
-    }
+    if (err.code === 11000) return res.status(400).json({ error: "Name must be unique" });
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ── PATCH toggle isActive ── */
 app.patch("/api/people/:id/toggle-active", async (req, res) => {
   try {
     const person = await People.findById(req.params.id);
     if (!person) return res.status(404).json({ error: "Person not found" });
-
     person.isActive = !person.isActive;
     await person.save();
-
-    res.json({
-      message: `${person.name} is now ${person.isActive ? "active" : "inactive"}`,
-      person,
-    });
+    res.json({ message: `${person.name} is now ${person.isActive ? "active" : "inactive"}`, person });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ── DELETE person ── */
 app.delete("/api/people/:id", async (req, res) => {
   try {
     const person = await People.findByIdAndDelete(req.params.id);
@@ -230,22 +186,14 @@ app.delete("/api/people/:id", async (req, res) => {
   }
 });
 
-/* ── GET person history ── */
 app.get("/api/people/:id/history", async (req, res) => {
   try {
     const person = await People.findById(req.params.id).lean();
     if (!person) return res.status(404).json({ error: "Person not found" });
 
     const entries = await Tea.find({
-      name: {
-        $regex: new RegExp(
-          `^${person.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
-          "i"
-        ),
-      },
-    })
-      .sort({ date: -1 })
-      .lean();
+      name: { $regex: new RegExp(`^${person.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+    }).sort({ date: -1 }).lean();
 
     const summary = entries.reduce(
       (acc, e) => {
@@ -258,7 +206,6 @@ app.get("/api/people/:id/history", async (req, res) => {
       },
       { totalAmount: 0, paidAmount: 0, teaCount: 0, coffeeCount: 0 }
     );
-
     summary.pendingAmount = summary.totalAmount - summary.paidAmount;
     res.json({ person, entries, summary });
   } catch (err) {
@@ -270,7 +217,6 @@ app.get("/api/people/:id/history", async (req, res) => {
    TEA ROUTES
 ══════════════════════════════════════ */
 
-/* ── GET all entries ── */
 app.get("/api/tea", async (req, res) => {
   try {
     const data = await Tea.find().sort({ date: -1 }).lean();
@@ -280,37 +226,38 @@ app.get("/api/tea", async (req, res) => {
   }
 });
 
-/* ── POST new entry → also upserts person ── */
+/* ── POST new entry → ALLOWS multiple entries per person per day ── */
 app.post("/api/tea", async (req, res) => {
   try {
-    const { name, teaCount, drinkType = "tea", date } = req.body;
+    const { name, teaCount, drinkType = "tea", date, allowDuplicate = false } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: "Name is required" });
     if (!teaCount || teaCount < 1) return res.status(400).json({ error: "teaCount must be ≥ 1" });
 
     const entryDate = date ? new Date(date) : new Date();
     const price = PRICES[drinkType] || PRICES.tea;
-    const { start, end } = getDayRange(entryDate);
 
-    // Duplicate check
-    const existing = await Tea.findOne({
-      name: {
-        $regex: new RegExp(
-          `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
-          "i"
-        ),
-      },
-      drinkType,
-      date: { $gte: start, $lte: end },
-    });
-
-    if (existing) {
-      return res.status(400).json({
-        error: `A ${drinkType} entry for "${name.trim()}" already exists on this date.`,
+    // Only check for duplicates if allowDuplicate is false (for today's regular entries)
+    if (!allowDuplicate) {
+      const { start, end } = getDayRange(entryDate);
+      const existing = await Tea.findOne({
+        name: {
+          $regex: new RegExp(
+            `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+            "i"
+          ),
+        },
+        drinkType,
+        date: { $gte: start, $lte: end },
       });
+
+      if (existing) {
+        return res.status(400).json({
+          error: `A ${drinkType} entry for "${name.trim()}" already exists on this date. Use 'Add Previous Entry' for multiple entries.`,
+        });
+      }
     }
 
-    // Save tea entry
     const newEntry = new Tea({
       name: name.trim(),
       teaCount: Number(teaCount),
@@ -321,9 +268,17 @@ app.post("/api/tea", async (req, res) => {
     });
 
     await newEntry.save();
-
-    // ✅ Auto-register person in People table (non-blocking)
     await upsertPerson(name.trim());
+
+    // Log creation
+    await PaymentLog.create({
+      entryId: newEntry._id,
+      name: newEntry.name,
+      entryDate: newEntry.date,
+      action: "created",
+      changedBy: "user",
+      details: `Added ${teaCount} ${drinkType}(s) — ${formatAmount(Number(teaCount) * price)}`,
+    });
 
     res.status(201).json(newEntry);
   } catch (err) {
@@ -331,11 +286,13 @@ app.post("/api/tea", async (req, res) => {
   }
 });
 
-/* ── PUT update entry ── */
+function formatAmount(n) {
+  return "₹" + n.toLocaleString("en-IN");
+}
+
 app.put("/api/tea/:id", async (req, res) => {
   try {
     const { name, teaCount, drinkType = "tea" } = req.body;
-
     if (!name?.trim()) return res.status(400).json({ error: "Name is required" });
     if (!teaCount || teaCount < 1) return res.status(400).json({ error: "teaCount must be ≥ 1" });
 
@@ -344,44 +301,41 @@ app.put("/api/tea/:id", async (req, res) => {
 
     const price = PRICES[drinkType] || PRICES.tea;
     const { start, end } = getDayRange(existing.date);
-
     const nameChanged = existing.name.toLowerCase() !== name.trim().toLowerCase();
     const drinkChanged = existing.drinkType !== drinkType;
 
     if (nameChanged || drinkChanged) {
       const duplicate = await Tea.findOne({
-        name: {
-          $regex: new RegExp(
-            `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
-            "i"
-          ),
-        },
+        name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
         drinkType,
         date: { $gte: start, $lte: end },
         _id: { $ne: req.params.id },
       });
       if (duplicate) {
-        return res.status(400).json({
-          error: `A ${drinkType} entry for "${name.trim()}" already exists on this date.`,
-        });
+        return res.status(400).json({ error: `A ${drinkType} entry for "${name.trim()}" already exists on this date.` });
       }
     }
 
+    const oldCount = existing.teaCount;
+    const oldDrink = existing.drinkType;
+
     const updated = await Tea.findByIdAndUpdate(
       req.params.id,
-      {
-        name: name.trim(),
-        teaCount: Number(teaCount),
-        drinkType,
-        amount: Number(teaCount) * price,
-      },
+      { name: name.trim(), teaCount: Number(teaCount), drinkType, amount: Number(teaCount) * price },
       { new: true }
     );
 
-    // ✅ If name changed, upsert the new name into People too
-    if (nameChanged) {
-      await upsertPerson(name.trim());
-    }
+    if (nameChanged) await upsertPerson(name.trim());
+
+    // Log edit
+    await PaymentLog.create({
+      entryId: updated._id,
+      name: updated.name,
+      entryDate: updated.date,
+      action: "edited",
+      changedBy: "user",
+      details: `Changed from ${oldCount} ${oldDrink}(s) to ${teaCount} ${drinkType}(s)`,
+    });
 
     res.json(updated);
   } catch (err) {
@@ -389,13 +343,24 @@ app.put("/api/tea/:id", async (req, res) => {
   }
 });
 
-/* ── DELETE entry ── */
+/* ── DELETE entry with logging ── */
 app.delete("/api/tea/:id", async (req, res) => {
   try {
-    const deleted = await Tea.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ error: "Entry not found" });
-    await PaymentLog.deleteMany({ entryId: req.params.id });
-    res.json({ message: "Deleted successfully" });
+    const entry = await Tea.findById(req.params.id);
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+
+    // Log deletion BEFORE deleting
+    await PaymentLog.create({
+      entryId: entry._id,
+      name: entry.name,
+      entryDate: entry.date,
+      action: "deleted",
+      changedBy: req.body?.changedBy || "user",
+      details: `Deleted ${entry.teaCount} ${entry.drinkType}(s) — ${formatAmount(entry.amount)} — ${entry.paid ? "was paid" : "was pending"}`,
+    });
+
+    await Tea.findByIdAndDelete(req.params.id);
+    res.json({ message: "Deleted successfully", deletedEntry: entry });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -405,7 +370,6 @@ app.delete("/api/tea/:id", async (req, res) => {
 app.patch("/api/tea/:id/pay", async (req, res) => {
   try {
     const { paid, changedBy = "system" } = req.body;
-
     const entry = await Tea.findById(req.params.id);
     if (!entry) return res.status(404).json({ error: "Entry not found" });
 
@@ -421,9 +385,70 @@ app.patch("/api/tea/:id/pay", async (req, res) => {
       entryDate: entry.date,
       action: newPaidStatus ? "paid" : "unpaid",
       changedBy,
+      details: `${entry.teaCount} ${entry.drinkType}(s) — ${formatAmount(entry.amount)}`,
     });
 
     res.json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── PATCH mark ALL entries of a person as paid ── */
+app.patch("/api/tea/pay-all-by-name", async (req, res) => {
+  try {
+    const { name, changedBy = "user" } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Name is required" });
+
+    const unpaidEntries = await Tea.find({
+      name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+      paid: false,
+    });
+
+    if (unpaidEntries.length === 0) {
+      return res.json({ message: "No unpaid entries found", updated: 0 });
+    }
+
+    let totalAmount = 0;
+    const bulkOps = [];
+    const logOps = [];
+
+    for (const entry of unpaidEntries) {
+      totalAmount += entry.amount;
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: entry._id },
+          update: { $set: { paid: true } },
+        },
+      });
+      logOps.push({
+        entryId: entry._id,
+        name: entry.name,
+        entryDate: entry.date,
+        action: "paid",
+        changedBy,
+        details: `Bulk paid — ${entry.teaCount} ${entry.drinkType}(s) — ${formatAmount(entry.amount)}`,
+      });
+    }
+
+    await Tea.bulkWrite(bulkOps);
+    await PaymentLog.insertMany(logOps);
+
+    // Also log a summary entry
+    await PaymentLog.create({
+      entryId: null,
+      name: name.trim(),
+      entryDate: new Date(),
+      action: "bulk_paid",
+      changedBy,
+      details: `All ${unpaidEntries.length} unpaid entries marked as paid — Total: ${formatAmount(totalAmount)}`,
+    });
+
+    res.json({
+      message: `All ${unpaidEntries.length} unpaid entries for "${name.trim()}" marked as paid`,
+      updated: unpaidEntries.length,
+      totalAmount,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -435,12 +460,24 @@ app.patch("/api/tea/:id/pay", async (req, res) => {
 
 app.get("/api/payment-logs", async (req, res) => {
   try {
-    const { entryId, name } = req.query;
+    const { entryId, name, page = 1, limit = 20 } = req.query;
     const filter = {};
     if (entryId) filter.entryId = entryId;
     if (name) filter.name = { $regex: new RegExp(name, "i") };
-    const logs = await PaymentLog.find(filter).sort({ timestamp: -1 }).lean();
-    res.json(logs);
+
+    const total = await PaymentLog.countDocuments(filter);
+    const logs = await PaymentLog.find(filter)
+      .sort({ timestamp: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .lean();
+
+    res.json({
+      logs,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -455,9 +492,7 @@ app.get("/api/stats", async (req, res) => {
     const entries = await Tea.find().lean();
     const today = new Date();
     const { start, end } = getDayRange(today);
-    const todayEntries = entries.filter(
-      (e) => e.date >= start && e.date <= end
-    );
+    const todayEntries = entries.filter((e) => e.date >= start && e.date <= end);
 
     const calc = (list) => {
       let tea = 0, coffee = 0, amount = 0, paid = 0;
@@ -470,25 +505,15 @@ app.get("/api/stats", async (req, res) => {
         if (e.paid) paid += amt;
         people.add(e.name.toLowerCase().trim());
       });
-      return {
-        tea, coffee, amount, paid,
-        pending: amount - paid,
-        people: people.size,
-      };
+      return { tea, coffee, amount, paid, pending: amount - paid, people: people.size };
     };
 
-    res.json({
-      today: calc(todayEntries),
-      allTime: calc(entries),
-    });
+    res.json({ today: calc(todayEntries), allTime: calc(entries) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ── Health check ── */
-app.get("/health", (_, res) =>
-  res.json({ status: "ok", time: new Date().toISOString() })
-);
+app.get("/health", (_, res) => res.json({ status: "ok", time: new Date().toISOString() }));
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT} 🚀`));
